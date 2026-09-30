@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geosnap-southafrica"
+version = "0.5.1"
+description = "South Africa connector for geosnap: ward-level Stats SA census data, suburbs and a modelled yearly series"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "Dylan Snyders" }]
+keywords = ["geosnap", "south africa", "geodemographics", "neighborhood dynamics", "spatial analysis", "Stats SA", "WorldPop", "wards"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: BSD License",
+  "Topic :: Scientific/Engineering :: GIS",
+]
+dependencies = [
+  "geosnap>=0.17,<0.18",
+  "duckdb>=1.0",
+  "geopandas>=1.0",
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "PyYAML>=6.0",
+  "requests>=2.32",
+  "openpyxl>=3.1",
+  "xlrd>=2.0",
+  "pyogrio>=0.10",
+  "shapely>=2.0",
+  "rasterio>=1.4",
+  "tobler>=0.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.8"]
+
+[project.urls]
+Homepage = "https://github.com/dmtsnyders-maker/geosnap-southafrica"
+Issues = "https://github.com/dmtsnyders-maker/geosnap-southafrica/issues"
+
+[project.scripts]
+geosnap-southafrica = "geosnap_southafrica.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["geosnap_southafrica*"]
+
+[tool.setuptools.package-data]
+geosnap_southafrica = ["default_config.yaml"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::PendingDeprecationWarning"]

@@ -1,0 +1,14 @@
+stats_sa_ward_zip_url: "https://www.statssa.gov.za/wp-content/uploads/2025/11/Ward-Product_Locked-spreadsheets.zip"
+stats_sa_ward_zip_filename: "Ward-Product_Locked-spreadsheets.zip"
+ward_service_url: ""
+ward_search_terms: ["South Africa", "Electoral Ward", "2020"]
+worldpop_url_2022: "https://data.worldpop.org/GIS/Population/Global_2015_2030/R2025A/2022/ZAF/v1/100m/constrained/zaf_pop_2022_CN_100m_R2025A_v1.tif"
+worldpop_urls_2011:
+  - "https://data.worldpop.org/GIS/Population/Global_2000_2020/2011/ZAF/zaf_ppp_2011.tif"
+  - "https://data.worldpop.org/GIS/Population/Global_2000_2020/2010/ZAF/zaf_ppp_2010.tif"
+worldpop:
+  mode: "comparable"
+  reference_year: 2022
+  zero_weight_fallback: "uniform"
+  block_rows: 512
+  crop_to_wards: true

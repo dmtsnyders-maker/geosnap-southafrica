@@ -1,0 +1,10 @@
+geosnap==0.17.0
+geopandas>=1.0
+pandas>=2.2
+numpy>=1.26
+PyYAML>=6.0
+requests>=2.32
+openpyxl>=3.1
+xlrd>=2.0
+pyogrio>=0.10
+shapely>=2.0
