@@ -102,3 +102,20 @@ def test_window_restriction_matches_full_and_handles_outside(tmp_path):
     assert annual.ward_raster_sums(r, far).iloc[0] == 0.0         # ward outside the raster
     assert annual.ward_raster_sums(r, wards, max_block_cells=100).equals(full) or \
         np.allclose(annual.ward_raster_sums(r, wards, max_block_cells=100), full)   # tiny blocks, same answer
+
+
+def test_prebuilt_worldpop_table_is_used(tmp_path, monkeypatch):
+    import pandas as pd
+
+    import geosnap_southafrica.prebuilt as pb
+    from geosnap_southafrica.annual import _cached_sums
+
+    pre = tmp_path / "prebuilt"
+    pre.mkdir()
+    pd.DataFrame({"geoid": ["a", "b", "a", "b"], "year": [2015, 2015, 2022, 2022], "sum": [1.0, 2.0, 3.0, 4.0]}).to_parquet(pre / pb.WORLDPOP_TABLE)
+    wards = gpd.GeoDataFrame({"geoid": ["b", "a"]}, geometry=[box(0, 0, 1, 1), box(1, 0, 2, 1)], crs=4326)
+    monkeypatch.delenv("GEOSNAP_SA_NO_PREBUILT", raising=False)
+    s = _cached_sums(2015, wards, tmp_path / "raw", tmp_path)
+    assert s.tolist() == [2.0, 1.0]
+    monkeypatch.setenv("GEOSNAP_SA_NO_PREBUILT", "1")
+    assert pb.worldpop_sums(2015, ["a"], tmp_path) is None

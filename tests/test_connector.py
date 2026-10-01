@@ -153,6 +153,8 @@ def test_fetch_arcgis_geojson_pages_and_string_oid_field(monkeypatch, tmp_path):
     seen = []
 
     class R:
+        status_code = 200
+
         def __init__(self, data): self.data = data
         def raise_for_status(self): pass
         def json(self): return self.data

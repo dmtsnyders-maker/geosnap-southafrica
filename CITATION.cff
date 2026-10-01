@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "geosnap-southafrica: a South Africa connector for geosnap"
+type: software
+authors:
+  - family-names: Snyders
+    given-names: Dylan
+version: 0.9.5
+date-released: 2026-09-30
+license: MIT
+repository-code: "https://github.com/dmtsnyders-maker/geosnap-southafrica"
+keywords:
+  - geosnap
+  - South Africa
+  - neighbourhood analysis
+  - geodemographics
+  - Stats SA
+abstract: >-
+  Ward-level South African census data, suburbs, a modelled yearly series and environmental layers in
+  geosnap's long-form format.

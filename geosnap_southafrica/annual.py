@@ -95,6 +95,12 @@ def _cached_sums(year: int, wards: gpd.GeoDataFrame, raw_dir: Path, cache_dir: P
     if cache.exists():
         s = pd.read_csv(cache, dtype={"geoid": str}).set_index("geoid")["sum"]
         return s.reindex(wards["geoid"].astype(str))
+    from .prebuilt import worldpop_sums   # local import: prebuilt imports this module
+
+    pre = worldpop_sums(year, wards["geoid"], cache_dir)
+    if pre is not None:
+        log.info("Using prebuilt WorldPop %d ward sums", year)
+        return pre
     raster = worldpop_raster(year, raw_dir)
     log.info("Summing WorldPop %d over %d wards ...", year, len(wards))
     s = ward_raster_sums(raster, wards)

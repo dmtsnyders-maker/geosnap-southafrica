@@ -24,7 +24,11 @@ def _run(argv=None) -> int:
     ap.add_argument("--suburbs", default=None, help="suburb polygon file/URL (default: OpenStreetMap points)")
     ap.add_argument("--suburb-field", default=None, help="suburb name column, if auto-detect picks wrong")
     ap.add_argument("--skip-suburbs", action="store_true")
+    ap.add_argument("--skip-amenities", action="store_true", help="skip only the (slow, Overpass-dependent) amenities check")
+    ap.add_argument("--skip-extras", action="store_true", help="skip the OpenStreetMap amenities and wealth-index checks")
     ap.add_argument("--annual", action="store_true", help="also test the modelled yearly series (2015, 2022, 2025)")
+    ap.add_argument("--census2011", default=None, help="folder with the DataFirst Census 2011 .dta files")
+    ap.add_argument("--sal", default=None, help="Census 2011 small-area polygons (file) to place them in 2020 wards")
     ap.add_argument("--no-store", action="store_true", help="do not build a geosnap DataStore (skips DuckDB)")
     args = ap.parse_args(argv)
 
@@ -136,6 +140,38 @@ def _run(argv=None) -> int:
             return "Cape Town " + ", ".join(f"{y}: {v:,.0f}" for y, v in tot.items())
         check("yearly series (modelled, anchored to 2022)", annual)
 
+    if cpt_df is not None and not args.skip_extras:
+        def amenities():
+            a = get_south_africa(store, years=[2022], municipality="CPT", extras=["amenities"])
+            assert len(a) == len(cpt_df), "extras changed the number of wards"
+            schools, health = int(a["n_schools"].sum()), int(a["n_health"].sum())
+            assert schools > 50, f"only {schools} schools found in Cape Town (OSM fetch incomplete?)"
+            assert a["n_schools"].notna().all()
+            return f"Cape Town: {schools} schools, {health} health facilities, {int(a['n_bus_stops'].sum())} bus stops"
+        if not args.skip_amenities:
+            check("extra: OpenStreetMap amenities", amenities, skip_on_error=True)
+
+        def rwi():
+            r = get_south_africa(store, years=[2022], municipality="CPT", extras=["rwi"])
+            share = r["rwi_mean"].notna().mean()
+            assert share > 0.9, f"only {share:.0%} of wards have a wealth index"
+            return f"{share:.0%} of wards; ward mean RWI ranges {r['rwi_mean'].min():.2f} to {r['rwi_mean'].max():.2f}"
+        check("extra: Relative Wealth Index", rwi, skip_on_error=True)
+
+    if cpt_df is not None and not args.skip_extras:
+        def landcover():
+            r = get_south_africa(store, years=[2022], municipality="CPT", extras=["landcover"])
+            tree, built = r["lc_share_tree"].mean(), r["lc_share_built"].mean()
+            assert r["lc_share_built"].notna().mean() > 0.9 and 0 < built < 1, f"built share {built}"
+            return f"Cape Town wards: mean tree share {tree:.0%}, built-up {built:.0%}"
+        check("extra: land cover (ESA WorldCover)", landcover, skip_on_error=True)
+
+        def vegetation():
+            r = get_south_africa(store, years=[2022], municipality="CPT", extras=["vegetation"])
+            assert r["veg_dominant"].notna().mean() > 0.8, "few wards matched a vegetation type"
+            return f"{r['veg_dominant'].nunique()} dominant vegetation types, e.g. {r['veg_dominant'].mode().iloc[0]}"
+        check("extra: SANBI vegetation map", vegetation, skip_on_error=True)
+
     if cpt_df is not None and not args.skip_suburbs:
         def suburbs():
             src = args.suburbs if args.suburbs else True
@@ -163,6 +199,25 @@ def _run(argv=None) -> int:
             assert abs(tot / cpt_df["population"].sum() - 1) < 0.02, f"suburb total {tot:,.0f} != ward total"
             return f"{len(res)} suburbs, population {tot:,.0f} (within 2% of ward total)"
         check("ward -> suburb population interpolation", interp, skip_on_error=not args.suburbs)
+
+    if args.census2011:
+        def subplaces():
+            from geosnap_southafrica.census2011 import read_sal_counts, subplaces_2011
+            c = read_sal_counts(args.census2011)
+            assert abs(c["population"].sum() / 51_770_560 - 1) < 0.01, f"population {c['population'].sum():,.0f} vs Census 2011 51,770,560"
+            sp = subplaces_2011(args.census2011)
+            return f"{len(c):,} small areas, {len(sp):,} sub-places, population {c['population'].sum():,.0f}"
+        check("Census 2011 sub-places (no geometry needed)", subplaces)
+
+        if args.sal and cpt_df is not None:
+            def wards11():
+                w = get_south_africa(store, years=[2011, 2022], municipality="CPT", census2011=args.census2011, sal_geometry=args.sal)
+                tot = w.groupby("year")["population"].sum()
+                assert abs(tot[2011] / 3_740_026 - 1) < 0.02, f"Cape Town 2011 population {tot[2011]:,.0f} vs 3,740,026"
+                cols = ["median_hh_income", "pct_formal_dwelling", "pct_owner_occupied", "head_unemployment_rate"]
+                med = w[w.year == 2011][cols].median().round(3).to_dict()
+                return f"Cape Town 2011 {tot[2011]:,.0f} people in {int((w.year == 2011).sum())} wards; median ward {med}"
+            check("Census 2011 re-based onto 2020 wards", wards11)
 
     width = max(len(n) for _, n, _ in results)
     print()

@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 OVERPASS_ENDPOINTS = (
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
 )
 PLACE_TYPES = "suburb|neighbourhood|quarter"
 USER_AGENT = "geosnap-southafrica/0.4 (+https://github.com/)"

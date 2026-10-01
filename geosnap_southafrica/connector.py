@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Iterable
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from .config import load_config
@@ -24,10 +25,12 @@ from .ward_data import load_official_ward_estimates
 from .worldpop import build_worldpop_surfaces
 from .annual import ANCHOR_YEAR, WORLDPOP_YEARS, build_annual
 from .community import prepare_year_frames
+from .extras import apply_extras
 from .suburbs import add_suburb_columns, load_suburbs
 
 log = logging.getLogger(__name__)
 
+CENSUS_2011_YEAR = 2011  # optional: needs the DataFirst Census 2011 files (see census2011.py)
 CENSUS_YEARS = (2022,)  # years with an official Stats SA ward product
 SUPPORTED_YEARS = tuple(sorted(set(CENSUS_YEARS) | set(WORLDPOP_YEARS)))  # other years are modelled (see annual.py)
 SCHEMA_VERSION = 2  # bump when cached output columns change
@@ -206,6 +209,27 @@ def _load_base_longform(
     return long
 
 
+_DATA_PREFIXES = ("population", "age_", "sex_", "pct_", "youth", "working_age", "older_", "dependency",
+                  "old_age", "aging", "potential_support", "n_total_pop")
+
+
+def _append_2011(long: gpd.GeoDataFrame, folder, sal_geometry, sal_code_field) -> gpd.GeoDataFrame:
+    """Add Census 2011 rows (official counts re-based onto the 2020 wards in ``long``)."""
+    from .census2011 import wards_2011
+
+    base = long[long["year"] == 2022].drop_duplicates("geoid").reset_index(drop=True)
+    ind = wards_2011(folder, sal_geometry, base, sal_code_field=sal_code_field)
+    block = base.copy()
+    for col in block.columns:
+        if col.startswith(_DATA_PREFIXES) and pd.api.types.is_numeric_dtype(block[col]):
+            block[col] = np.nan
+    for col in ind.columns:
+        block[col] = ind[col].reindex(block["geoid"].astype(str)).values
+    block["year"] = CENSUS_2011_YEAR
+    block["population_basis"] = "census_2011_rebased"
+    return gpd.GeoDataFrame(pd.concat([long, block], ignore_index=True), geometry="geometry", crs=long.crs)
+
+
 def get_south_africa(
     datastore=None,
     *,
@@ -218,6 +242,11 @@ def get_south_africa(
     suburbs=None,
     suburb_name_field: str | None = None,
     suburb_min_share: float = 0.05,
+    extras=None,
+    extras_errors: str = "raise",
+    census2011: str | Path | None = None,
+    sal_geometry=None,
+    sal_code_field: str | None = None,
 ) -> gpd.GeoDataFrame:
     """Extract South African ward-level neighbourhood data in geosnap format.
 
@@ -254,6 +283,22 @@ def get_south_africa(
     suburb_min_share : float, optional
         Minimum share of a ward a suburb must cover to be listed (default 5%).
 
+    extras : str or list of str, optional
+        Extra ward variables fetched automatically and joined by ``geoid`` (same values every year):
+        ``"amenities"`` (OpenStreetMap counts of schools, health, transit, shops ...) and ``"rwi"``
+        (Meta Relative Wealth Index, a wealth proxy). See :mod:`geosnap_southafrica.extras`.
+    extras_errors : {"raise", "warn"}, optional
+        ``"warn"`` skips an extra whose download fails instead of raising.
+
+    census2011 : str or pathlib.Path, optional
+        Folder with the DataFirst "Census Community Profiles 2011" Stata (``.dta``) files. Enables
+        ``years=[2011, ...]``: official Census 2011 counts re-based onto the 2020 wards, with income,
+        dwelling, tenure, services, household-head employment, etc. (:mod:`geosnap_southafrica.census2011`).
+    sal_geometry : str, pathlib.Path or geopandas.GeoDataFrame, optional
+        Census 2011 small-area polygons (needed with ``census2011`` to place small areas in wards).
+    sal_code_field : str, optional
+        Small-area code column in ``sal_geometry`` (auto-detected when omitted).
+
     Returns
     -------
     geopandas.GeoDataFrame
@@ -269,7 +314,8 @@ def get_south_africa(
     their 2022 values. See :mod:`geosnap_southafrica.annual`.
     """
     requested = _normalise_years(years)
-    unsupported = sorted(set(requested) - set(SUPPORTED_YEARS))
+    allowed = set(SUPPORTED_YEARS) | ({CENSUS_2011_YEAR} if census2011 is not None else set())
+    unsupported = sorted(set(requested) - allowed)
     if unsupported:
         raise ValueError(f"Unsupported years: {unsupported}. Census year: {CENSUS_YEARS}; modelled annual years: "
                          f"{WORLDPOP_YEARS[0]}-{WORLDPOP_YEARS[-1]}.")
@@ -283,12 +329,21 @@ def get_south_africa(
     long = _filter_boundary(long, boundary)
     long = long.reset_index(drop=True)
 
-    extra = [y for y in requested if y not in CENSUS_YEARS]
+    if CENSUS_2011_YEAR in requested:
+        if census2011 is None or sal_geometry is None:
+            raise ValueError("years including 2011 need census2011=<folder of DataFirst .dta files> and "
+                             "sal_geometry=<Census 2011 small-area polygons>.")
+        long = _append_2011(long, census2011, sal_geometry, sal_code_field)
+
+    extra = [y for y in requested if y not in CENSUS_YEARS and y != CENSUS_2011_YEAR]
     if extra:
         sa_root = root / "south_africa"
-        annual = build_annual(long, extra, sa_root / "raw", sa_root / "cache")
+        annual = build_annual(long[long["year"] == 2022], extra, sa_root / "raw", sa_root / "cache")
         long = gpd.GeoDataFrame(pd.concat([long, annual], ignore_index=True), geometry="geometry", crs=long.crs)
     long = long[long["year"].isin(requested)].sort_values(["year", "geoid"]).reset_index(drop=True)
+
+    if extras:
+        long = apply_extras(long, extras, root / "south_africa" / "cache", errors=extras_errors)
 
     if suburbs is not None and suburbs is not False:
         source = suburbs

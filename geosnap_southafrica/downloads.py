@@ -10,7 +10,23 @@ from typing import Iterable
 import requests
 
 log = logging.getLogger(__name__)
-USER_AGENT = "geosnap-southafrica/0.4 (+https://www.statssa.gov.za/)"
+USER_AGENT = "geosnap-southafrica (+https://github.com/dmtsnyders-maker/geosnap-southafrica)"
+BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+              "Chrome/124.0 Safari/537.36")
+
+
+def http_get(url: str, *, params=None, timeout: int = 60, stream: bool = False):
+    """GET with our identifying user-agent; if the server answers 403/406 retry once with a browser user-agent.
+
+    Some ArcGIS servers reject non-browser clients. The data are public; this only changes the header.
+    """
+    r = requests.get(url, params=params, headers={"User-Agent": USER_AGENT}, timeout=timeout, stream=stream)
+    if r.status_code in (403, 406):
+        r.close()
+        r = requests.get(url, params=params, timeout=timeout, stream=stream,
+                         headers={"User-Agent": BROWSER_UA, "Accept": "application/json, */*;q=0.8",
+                                  "Referer": url.split("/server/")[0].replace("bgismaps.", "bgis.") + "/"})
+    return r
 
 
 def sha256_file(path: str | Path, chunk_size: int = 1024 * 1024) -> str:
@@ -104,12 +120,12 @@ def _oid_field_name(md: dict) -> str | None:
     return val or None
 
 
-def fetch_arcgis_geojson(service_url: str, out_geojson: str | Path) -> Path:
+def fetch_arcgis_geojson(service_url: str, out_geojson: str | Path, *, bbox=None) -> Path:
     """Download all features from a public ArcGIS REST layer as GeoJSON (paged by resultOffset)."""
     import geopandas as gpd
     layer = _service_layer_url(service_url)
     headers = {"User-Agent": USER_AGENT}
-    meta = requests.get(layer, params={"f": "json"}, headers=headers, timeout=60)
+    meta = http_get(layer, params={"f": "json"}, timeout=60)
     meta.raise_for_status()
     md = meta.json()
     if "error" in md:
@@ -122,9 +138,12 @@ def fetch_arcgis_geojson(service_url: str, out_geojson: str | Path) -> Path:
     while True:
         params = {"where": "1=1", "outFields": "*", "returnGeometry": "true", "outSR": "4326", "f": "geojson",
                   "resultOffset": offset, "resultRecordCount": page}
+        if bbox is not None:   # (minx, miny, maxx, maxy) in EPSG:4326: only features touching this box
+            params.update({"geometry": ",".join(f"{v:.6f}" for v in bbox), "geometryType": "esriGeometryEnvelope",
+                           "inSR": "4326", "spatialRel": "esriSpatialRelIntersects"})
         if oid_field:
             params["orderByFields"] = oid_field
-        r = requests.get(query, params=params, headers=headers, timeout=180)
+        r = http_get(query, params=params, timeout=180)
         r.raise_for_status()
         payload = r.json()
         if "error" in payload:
@@ -142,5 +161,5 @@ def fetch_arcgis_geojson(service_url: str, out_geojson: str | Path) -> Path:
     out_geojson.parent.mkdir(parents=True, exist_ok=True)
     out_geojson.write_text(json.dumps(combined), encoding="utf-8")
     if gpd.read_file(out_geojson).empty:
-        raise RuntimeError("ArcGIS ward layer returned zero features")
+        raise RuntimeError("ArcGIS layer returned zero features")
     return out_geojson

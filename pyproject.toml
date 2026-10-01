@@ -4,16 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geosnap-southafrica"
-version = "0.5.1"
+version = "0.9.5"
 description = "South Africa connector for geosnap: ward-level Stats SA census data, suburbs and a modelled yearly series"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "BSD-3-Clause" }
+license = { text = "MIT" }
 authors = [{ name = "Dylan Snyders" }]
 keywords = ["geosnap", "south africa", "geodemographics", "neighborhood dynamics", "spatial analysis", "Stats SA", "WorldPop", "wards"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: BSD License",
+  "License :: OSI Approved :: MIT License",
   "Topic :: Scientific/Engineering :: GIS",
 ]
 dependencies = [
