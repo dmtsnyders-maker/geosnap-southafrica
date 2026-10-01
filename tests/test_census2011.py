@@ -106,3 +106,34 @@ def test_get_south_africa_adds_2011_rows(folder, monkeypatch, tmp_path):
     assert out[(out.geoid == "W2") & (out.year == 2022)]["population"].iloc[0] == 200
     with pytest.raises(ValueError):
         connector.get_south_africa(years=[2011], data_dir=tmp_path / "d", census2011=folder)
+
+
+def test_places_levels_and_new_topics(folder):
+    from geosnap_southafrica.census2011 import places_2011
+
+    mp = places_2011(folder, "main_place")
+    assert mp["population"].sum() == 50 and {"mp_code", "mp_name"}.issubset(mp.columns)
+    assert len(places_2011(folder, "province")) == 1 and len(places_2011(folder, "municipality")) == 1
+    gp = places_2011(folder, "main_place", _sal_geom())
+    assert isinstance(gp, gpd.GeoDataFrame) and gp.geometry.notna().all()
+    try:
+        places_2011(folder, "ward")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("bad level accepted")
+
+
+def test_communication_and_relationship_topics(folder):
+    _write(folder / "f.dta", "comm", [[8] * 4, [1] * 4, [0] * 4, [1] * 4, [0] * 4, [0] * 4, [0] * 4, [3] * 4],
+           ["No difficulty", "Some difficulty", "A lot of difficulty", "Cannot do at all", "Do not know",
+            "Cannot yet be determined", "Unspecified", "Not applicable"])
+    _write(folder / "g.dta", "relhh", [[2] * 4, [1] * 4, [3] * 4, [0] * 4, [0] * 4, [0] * 4, [0] * 4, [0] * 4, [2] * 4,
+                                       [0] * 4, [0] * 4, [0] * 4, [0] * 4, [2] * 4, [0] * 4, [5] * 4],
+           ["Head/Acting head", "Husband/Wife/Partner", "Son/daughter", "Adopted Son/Daughter", "Stepchild", "Brother/sister",
+            "Parent Mother/Father", "Parent-in-law", "Grand/Great-Grandchild", "Son/Daughter-in-law", "Brother/Sister-in-law",
+            "Grandmother/Father", "Other relative", "Non-related person", "Unspecified", "Not applicable"])
+    c = read_sal_counts(folder)
+    ind = derive_indicators(c[count_columns(c)])
+    assert abs(ind["pct_comm_difficulty"].iloc[0] - 2 / 10) < 1e-9          # 2 of 10 with difficulty
+    assert abs(ind["pct_rel_grandchild"].iloc[0] - 2 / 10) < 1e-9 and abs(ind["pct_rel_nonrelated"].iloc[0] - 2 / 10) < 1e-9

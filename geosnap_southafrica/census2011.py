@@ -219,11 +219,32 @@ def _share_handler(prefix, mapping):
     return handler
 
 
+def _h_comm(df, labels):
+    """Difficulty communicating (a disability proxy): share with some, a lot of difficulty or unable."""
+    cols = _cols(df, "comm")
+    v = _num(df, cols)
+    some = v[_by_label(labels, cols, "some difficulty", "a lot of difficulty", "cannot do")].sum(axis=1)
+    none = v[_by_label(labels, cols, "no difficulty")].sum(axis=1)
+    return pd.DataFrame({"comm_difficulty": some, "comm_known": some + none}, index=df.index)
+
+
+def _h_relhh(df, labels):
+    """Household composition from relationship to the household head."""
+    cols = _cols(df, "relhh")
+    v = _num(df, cols)
+    lab = lambda *k: v[_by_label(labels, cols, *k)].sum(axis=1)  # noqa: E731
+    known = v[[c for c in cols if not any(w in labels.get(c, "").lower() for w in ("unspecified", "not applicable"))]].sum(axis=1)
+    return pd.DataFrame({"rel_head": lab("head/acting head"), "rel_partner": lab("husband/wife/partner"),
+                         "rel_child": lab("son/daughter -", "adopted", "stepchild"),
+                         "rel_grandchild": lab("grand/great-grandchild"), "rel_nonrelated": lab("non-related"),
+                         "rel_known": known}, index=df.index)
+
+
 TOPICS = {
     "pgrp": _h_pgrp, "age": _h_age, "inchh": _h_inchh, "dwltyp": _h_dwltyp, "tensta": _h_tensta,
     "wtrsrs": _h_wtrsrs, "hhsize": _h_hhsize, "emsthhh": _h_emsthhh, "brthreg": _h_brthreg,
     "yrmved": _h_yrmved, "cell": _yes_no("cell", "cellphone"), "mtrcar": _yes_no("mtrcar", "car"),
-    "inter": _h_inter,
+    "inter": _h_inter, "comm": _h_comm, "relhh": _h_relhh,
     "eatyp": _share_handler("eatyp", {"ea_formal": ("formal residential",), "ea_informal": ("informal residential",),
                                       "ea_traditional": ("traditional residential",), "ea_farm": ("farms",)}),
     "geotyp": _share_handler("geotyp", {"geo_urban": ("urban",), "geo_tribal": ("tribal",), "geo_farm": ("farm",)}),
@@ -444,6 +465,13 @@ def derive_indicators(c: pd.DataFrame) -> pd.DataFrame:
         o["pct_car"] = _ratio(c["car_yes"], c["car_known"])
     if has("internet_none", "internet_known"):
         o["pct_internet_access"] = 1 - _ratio(c["internet_none"], c["internet_known"])
+    if has("comm_difficulty", "comm_known"):
+        o["pct_comm_difficulty"] = _ratio(c["comm_difficulty"], c["comm_known"])
+    if has("rel_head", "rel_partner", "rel_child", "rel_known"):
+        o["pct_rel_child_of_head"] = _ratio(c["rel_child"], c["rel_known"])
+        o["pct_rel_grandchild"] = _ratio(c["rel_grandchild"], c["rel_known"])
+        o["pct_rel_nonrelated"] = _ratio(c["rel_nonrelated"], c["rel_known"])
+        o["pct_rel_extended"] = _ratio(c["rel_known"] - c["rel_head"] - c["rel_partner"] - c["rel_child"], c["rel_known"])
     if has("ea_formal", "ea_informal", "eatyp_known"):
         o["pct_ea_informal"] = _ratio(c["ea_informal"], c["eatyp_known"])
     if has("geo_urban", "geotyp_known"):
@@ -532,19 +560,35 @@ def wards_2011(folder: str | Path, sal_geometry, wards: gpd.GeoDataFrame, *, id_
     return ind.reindex(wards[id_col].astype(str).values).rename_axis(id_col)
 
 
-def subplaces_2011(folder: str | Path, sal_geometry=None, *, sal_code_field: str | None = None):
-    """Census 2011 indicators per official sub-place (suburb): needs no geometry.
+PLACE_LEVELS = {
+    "sub_place": ("sp_code", "sp_name", "mp_name", "mn_name", "pr_name"),
+    "main_place": ("mp_code", "mp_name", "mn_name", "pr_name"),
+    "municipality": ("mn_code", "mn_name", "dc_name", "pr_name"),
+    "district": ("dc_code", "dc_name", "pr_name"),
+    "province": ("pr_code", "pr_name"),
+}
 
-    With ``sal_geometry`` the result is a GeoDataFrame (small areas dissolved per sub-place), otherwise a
-    plain DataFrame with ``sp_code``, ``sp_name``, ``mn_name``, ``pr_name`` and the indicators.
+
+def places_2011(folder: str | Path, level: str = "sub_place", sal_geometry=None, *, sal_code_field: str | None = None):
+    """Census 2011 indicators per official place: ``level`` is one of ``PLACE_LEVELS`` (sub_place = suburb,
+    main_place = town/township/village, municipality, district, province). Needs no geometry; with
+    ``sal_geometry`` the small areas are dissolved into a polygon per place and a GeoDataFrame is returned.
     """
+    if level not in PLACE_LEVELS:
+        raise ValueError(f"level must be one of {list(PLACE_LEVELS)}")
     counts = read_sal_counts(folder)
-    keys = [k for k in ("sp_code", "sp_name", "mn_name", "pr_name") if k in counts.columns]
+    keys = [k for k in PLACE_LEVELS[level] if k in counts.columns]
     grouped = counts.groupby(keys, dropna=False)[count_columns(counts)].sum()
     ind = derive_indicators(grouped).reset_index()
     if sal_geometry is None:
         return ind
+    code = keys[0]
     g = load_sal_geometry(sal_geometry, counts["sal_code"], sal_code_field=sal_code_field)
-    g = g.merge(counts[["sal_code", "sp_code"]], on="sal_code")
-    poly = g.dissolve(by="sp_code", as_index=False)[["sp_code", g.geometry.name]]
-    return gpd.GeoDataFrame(ind.merge(poly, on="sp_code", how="left"), geometry=g.geometry.name, crs=g.crs)
+    g = g.merge(counts[["sal_code", code]], on="sal_code")
+    poly = g.dissolve(by=code, as_index=False)[[code, g.geometry.name]]
+    return gpd.GeoDataFrame(ind.merge(poly, on=code, how="left"), geometry=g.geometry.name, crs=g.crs)
+
+
+def subplaces_2011(folder: str | Path, sal_geometry=None, *, sal_code_field: str | None = None):
+    """Census 2011 indicators per official sub-place (suburb). See :func:`places_2011`."""
+    return places_2011(folder, "sub_place", sal_geometry, sal_code_field=sal_code_field)

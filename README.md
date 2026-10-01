@@ -120,8 +120,11 @@ DataFirst **Census Community Profiles 2011** (free DataFirst login, Stata files,
 ```python
 from geosnap_southafrica import get_south_africa, subplaces_2011
 
-# official sub-places (suburbs) with census data - needs only the .dta files
+# official places with census data - needs only the .dta files. level: sub_place (suburb), main_place
+# (town / township / village), municipality, district, province
+from geosnap_southafrica import places_2011
 suburbs = subplaces_2011(r"C:\data\census2011")
+towns = places_2011(r"C:\data\census2011", "main_place")
 
 # 2011 + 2022 on the 2020 wards (needs the small-area polygons to place each small area in a ward)
 wards = get_south_africa(years=[2011, 2022], municipality="CPT",
@@ -132,6 +135,11 @@ Each small area goes to the 2020 ward containing its representative point and co
 (Cape Town 3.74 M). 2011 rows have `population_basis == "census_2011_rebased"`. Median household income is interpolated
 from Stats SA's income bands (annual, nominal 2011 rand). Data are not bundled: download them yourself (licence terms
 apply) and keep them out of git.
+
+Census 2011 place names (main place and sub-place) are part of the DataFirst small-area files, so no separate purchase from
+Stats SA is needed for those names. Cape Town's main places, for example, range from a median household income near R146,000 (Cape Town)
+to about R20,000 (Khayelitsha). Also derived: difficulty communicating (a disability proxy) and household composition from the
+relationship-to-head table (`pct_rel_grandchild`, `pct_rel_extended`, ...). Language is a separate DataFirst table and is not read yet.
 
 ## Prebuilt tables (faster yearly data)
 

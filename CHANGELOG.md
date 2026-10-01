@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0
+
+- `places_2011(folder, level)`: Census 2011 indicators per sub-place, main place, municipality, district or province (no geometry needed;
+  polygons when small-area geometry is given). Verified on the real files: 13,877 main places, 234 municipalities.
+- New Census 2011 topics: difficulty communicating (disability proxy) and household composition from relationship to household head.
+
 ## 0.9.6
 
 - README: replaced the outdated "Not included yet" table with the current status of every topic. Licence: MIT only.
