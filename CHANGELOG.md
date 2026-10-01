@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.6
+
+- README: replaced the outdated "Not included yet" table with the current status of every topic. Licence: MIT only.
+
 ## 0.9.5
 
 - README: OSM amenity coverage caveat. Verified end to end on real servers: ward data, yearly series, Census 2011 sub-places, land cover, SANBI vegetation, wealth index, prebuilt WorldPop and OSM tables.

@@ -16,4 +16,4 @@ try:
     from importlib.metadata import version
     __version__ = version("geosnap-southafrica")
 except Exception:
-    __version__ = "0.9.5"
+    __version__ = "0.9.6"

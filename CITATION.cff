@@ -5,7 +5,7 @@ type: software
 authors:
   - family-names: Snyders
     given-names: Dylan
-version: 0.9.5
+version: 0.9.6
 date-released: 2026-09-30
 license: MIT
 repository-code: "https://github.com/dmtsnyders-maker/geosnap-southafrica"

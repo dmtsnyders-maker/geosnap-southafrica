@@ -52,21 +52,24 @@ seq = sequence(gdf, seq_clusters=3, cluster_col="kmeans", dist_type="hamming")  
 | Variables | income, poverty, education, housing, jobs, ... | population, age, sex, population group (see next section) |
 | Status | part of geosnap | separate package; an upstream proposal is sketched in `upstream/` |
 
-## Not included yet - and what could fill the gaps
+## What is included, and what is not
 
-The Stats SA ward product holds **population, age (5-year bands), sex and population group only**. geosnap's US datasets also carry much more, and none of it is in this connector yet:
+geosnap's US datasets carry far more than population, age, sex and race. This is where this connector stands:
 
-| Missing | Why | Possible source (to be added / verify before use) |
+| Topic | Status | How |
 |---|---|---|
-| Income, poverty, deprivation | not in the 2022 ward product | **Wealth proxy now available: `extras=["rwi"]`.** Real income needs Census 2011 Community Profiles on Stats SA SuperWEB2 (ward level, free account, manual download); night-time lights (not yet added) |
-| Education, employment | same | Census 2011 Community Profiles (SuperWEB2) |
-| Housing, dwelling type, tenure, services (water, power, sanitation) | same | Census 2011 Community Profiles (SuperWEB2); satellite built-up layers as proxies |
-| Language, disability, household size | same | Census 2011 Community Profiles (SuperWEB2) |
-| Schools, clinics, transit, shops | not in census data | **Now available: `extras=["amenities"]`** (OpenStreetMap) |
-| Jobs / workplace data (LEHD-like) | no South African equivalent bundled | none yet |
-| A second official vintage for real change over time | Stats SA published one ward vintage | Census 2011 tables re-based to 2020 wards by area weighting |
+| Population, age bands, sex, population group | **Official, 2022**, all 4,468 wards | built in |
+| Income (median household income, low/high-income shares), dwelling type, tenure, water, household size, household-head unemployment, foreign-born, mobility, cell phone / car / internet | **Official, Census 2011**, re-based to 2020 wards | `census2011=` (DataFirst files, see below) |
+| Education, toilet, electricity, refuse | **Supported, needs those DataFirst files** | add the matching `.dta` tables to the same folder |
+| Real change over time | **Census 2011 to 2022** two-census panel; other years are *modelled* | `years=[2011, 2022]`; `years=2015..2030` modelled |
+| Wealth / deprivation proxy | Proxy | `extras=["rwi"]` (Meta Relative Wealth Index) |
+| Schools, clinics, transit, shops | Proxy (OSM, partial coverage) | `extras=["amenities"]` |
+| Vegetation, biomes, protected areas, land cover, elevation, climate | Environmental layers | `extras=[...]`, see below |
+| Language, disability | Not yet | Census 2011 Community Profiles tables; importer not written |
+| Jobs / workplace data (LEHD-like) | Not available | no South African equivalent bundled |
+| Night-time lights, heat maps, geology | Not yet | use `add_raster_stats` / `add_polygon_layer` with a file you supply |
 
-Manual Stats SA downloads (SuperWEB2 CSV exports) use 2011-era ward boundaries, so their ward codes will not match the 2020 ward IDs used here; they must be re-based by area weighting (`interpolate_to_suburbs` shows the method) rather than joined on code.
+Census 2011 ward-level exports from Stats SA's SuperWEB2 use 2011-era ward boundaries, so their ward codes do not match the 2020 ward IDs; they must be re-based (small-area counts are placed in 2020 wards by representative point, see `geosnap_southafrica.census2011`), not joined on code.
 
 ## Extra ward variables, fetched automatically
 
